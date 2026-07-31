@@ -1,9 +1,9 @@
 services:
   open-webui:
+    image: open-webui
     build:
       context: .
       dockerfile: Dockerfile
-    image: open-webui
     container_name: open-webui
     volumes:
       - open-webui:/app/backend/data
@@ -14,13 +14,17 @@ services:
       - WEB_LOADER_ENGINE=scrapling_stealth
       - PLAYWRIGHT_TIMEOUT=60000
       - WHISPER_MODEL=base
+      - DO_NOT_TRACK=true
     extra_hosts:
       - host.docker.internal:host-gateway
     mem_limit: 4G
+    mem_reservation: 4G
+    restart: always
     # GPU support:
     # Linux NVIDIA: add `runtime: nvidia` and install nvidia-container-toolkit
     # Docker Desktop: GPUs auto-exposed; no extra config needed
-    restart: always
+
 
 volumes:
-  open-webui: {}
+  open-webui:
+    external: true
