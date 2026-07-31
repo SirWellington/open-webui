@@ -1,0 +1,26 @@
+services:
+  open-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: open-webui
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://host.docker.internal:1234/v1
+      - WEB_LOADER_ENGINE=scrapling_stealth
+      - PLAYWRIGHT_TIMEOUT=60000
+      - WHISPER_MODEL=base
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    mem_limit: 4G
+    # GPU support:
+    # Linux NVIDIA: add `runtime: nvidia` and install nvidia-container-toolkit
+    # Docker Desktop: GPUs auto-exposed; no extra config needed
+    restart: always
+
+volumes:
+  open-webui: {}
