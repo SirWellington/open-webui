@@ -8,6 +8,7 @@ IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 
 import asyncio
 import logging
+import re
 import time
 from typing import Literal, Optional
 
@@ -346,9 +347,13 @@ async def fetch_url(
     try:
         content, _ = await get_content_from_url(__request__, url)
 
-        # Truncate if configured (WEB_FETCH_MAX_CONTENT_LENGTH)
         # Guard: content may be None if the web loader silently failed
         if content is not None:
+            # Normalize whitespace to reduce excessive empty lines from HTML structure.
+            # BeautifulSoup's get_text() produces lots of structural newlines; collapse them.
+            content = _normalize_whitespace(content)
+
+            # Truncate if configured (WEB_FETCH_MAX_CONTENT_LENGTH)
             max_length = await Config.get('web.fetch.max_content_length')
             if max_length and max_length > 0 and len(content) > max_length:
                 content = content[:max_length] + '\n\n[Content truncated...]'
@@ -359,6 +364,22 @@ async def fetch_url(
     except Exception as e:
         log.warning(f'fetch_url error: {e}')
         return JSONCodec.dumps({'error': str(e)})
+
+
+def _normalize_whitespace(content: str) -> str:
+    """Collapse excessive whitespace in extracted text.
+
+    HTML structure (divs, sections, nav bars) causes BeautifulSoup's get_text() to emit
+    hundreds of consecutive blank lines. This function reduces that noise while preserving
+    meaningful paragraph breaks.
+    """
+    # Strip leading/trailing whitespace from entire text
+    result = content.strip()
+    # Remove trailing whitespace from each line
+    result = '\n'.join(line.rstrip() for line in result.split('\n'))
+    # Collapse 3+ consecutive newlines to 2 (preserve paragraph breaks)
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    return result
 
 
 # =============================================================================

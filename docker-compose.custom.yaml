@@ -17,8 +17,7 @@ services:
       - DO_NOT_TRACK=true
     extra_hosts:
       - host.docker.internal:host-gateway
-    mem_limit: 4G
-    mem_reservation: 4G
+    mem_limit: 8G
     restart: always
     # GPU support:
     # Linux NVIDIA: add `runtime: nvidia` and install nvidia-container-toolkit

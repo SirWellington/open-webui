@@ -2,6 +2,7 @@ import asyncio
 import http.cookiejar
 import ipaddress
 import logging
+import re as _re
 import socket
 import ssl
 import time
@@ -944,13 +945,29 @@ class SafeScraplingLoader(BaseLoader):
 
                 resp = StealthyFetcher.fetch(url, **fetch_kwargs)
 
+                html_content = resp.html_content if hasattr(resp, 'html_content') else ''
                 text_content = None
-                try:
-                    text_content = resp.get_all_text(separator='\n', clean=True, whitespace=False)
-                except Exception:
-                    text_content = str(resp.html_content).strip() if hasattr(resp, 'html_content') else ''
 
-                yield Document(page_content=text_content.strip(), metadata={'source': url})
+                if html_content.strip():
+                    try:
+                        from readability import Document as ReadabilityDocument
+
+                        doc = ReadabilityDocument(html_content)
+                        summary_html = doc.summary()
+                        text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
+                    except Exception:
+                        pass
+
+                if not text_content or len(text_content) < 50:
+                    try:
+                        text_content = str(resp.get_all_text(separator='\n')).strip()
+                    except Exception:
+                        pass
+
+                if not text_content:
+                    text_content = ''
+
+                yield Document(page_content=text_content, metadata={'source': url})
 
             except Exception as e:
                 log.exception(f'Scraping failed for {url}: {e}')
@@ -977,13 +994,29 @@ class SafeScraplingLoader(BaseLoader):
 
                 resp = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
 
+                html_content = resp.html_content if hasattr(resp, 'html_content') else ''
                 text_content = None
-                try:
-                    text_content = resp.get_all_text(separator='\n', clean=True, whitespace=False)
-                except Exception:
-                    text_content = str(resp.html_content).strip() if hasattr(resp, 'html_content') else ''
 
-                yield Document(page_content=text_content.strip(), metadata={'source': url})
+                if html_content.strip():
+                    try:
+                        from readability import Document as ReadabilityDocument
+
+                        doc = ReadabilityDocument(html_content)
+                        summary_html = doc.summary()
+                        text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
+                    except Exception:
+                        pass
+
+                if not text_content or len(text_content) < 50:
+                    try:
+                        text_content = str(resp.get_all_text(separator='\n')).strip()
+                    except Exception:
+                        pass
+
+                if not text_content:
+                    text_content = ''
+
+                yield Document(page_content=text_content, metadata={'source': url})
 
             except Exception as e:
                 log.exception(f'Scraping failed for {url}: {e}')
