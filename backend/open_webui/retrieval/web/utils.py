@@ -755,6 +755,100 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
                         raise e
 
 
+def validate_url_sync(url):
+    try:
+        result = validate_url(url)
+        return result if isinstance(result, bool) else True
+    except Exception:
+        return False
+
+
+class SafeScraplingLoader(BaseLoader):
+    """Load URLs with Scrapling StealthyFetcher — undetectable Chromium-based browser with Cloudflare bypass."""
+
+    def __init__(
+        self,
+        web_paths: List[str],
+        continue_on_failure: bool = True,
+        timeout: int = 30000,
+        headless: bool = True,
+        solve_cloudflare: bool = True,
+        proxy: Optional[Dict[str, str]] = None,
+    ):
+        self.urls = [str(p) for p in web_paths]
+        self.continue_on_failure = continue_on_failure
+        self.timeout = timeout
+        self.headless = headless
+        self.solve_cloudflare = solve_cloudflare
+        self.proxy = proxy
+
+    def lazy_load(self) -> Iterator[Document]:
+        from scrapling import StealthyFetcher
+
+        for url in self.urls:
+            try:
+                if not validate_url_sync(url):
+                    raise ValueError(f'URL blocked by SSRF filter: {url}')
+
+                fetch_kwargs = {
+                    'headless': self.headless,
+                    'timeout': self.timeout,
+                    'solve_cloudflare': self.solve_cloudflare,
+                }
+                if self.proxy:
+                    server = self.proxy.get('server')
+                    if server:
+                        fetch_kwargs['proxy'] = server
+
+                resp = StealthyFetcher.fetch(url, **fetch_kwargs)
+
+                text_content = None
+                try:
+                    text_content = resp.get_all_text(separator='\n', clean=True, whitespace=False)
+                except Exception:
+                    text_content = str(resp.html_content).strip() if hasattr(resp, 'html_content') else ''
+
+                yield Document(page_content=text_content.strip(), metadata={'source': url})
+
+            except Exception as e:
+                log.exception(f'Scraping failed for {url}: {e}')
+                if not self.continue_on_failure:
+                    raise
+
+    async def alazy_load(self) -> AsyncIterator[Document]:
+        from scrapling import StealthyFetcher
+
+        for url in self.urls:
+            try:
+                if not validate_url_sync(url):
+                    raise ValueError(f'URL blocked by SSRF filter: {url}')
+
+                fetch_kwargs = {
+                    'headless': self.headless,
+                    'timeout': self.timeout,
+                    'solve_cloudflare': self.solve_cloudflare,
+                }
+                if self.proxy:
+                    server = self.proxy.get('server')
+                    if server:
+                        fetch_kwargs['proxy'] = server
+
+                resp = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
+
+                text_content = None
+                try:
+                    text_content = resp.get_all_text(separator='\n', clean=True, whitespace=False)
+                except Exception:
+                    text_content = str(resp.html_content).strip() if hasattr(resp, 'html_content') else ''
+
+                yield Document(page_content=text_content.strip(), metadata={'source': url})
+
+            except Exception as e:
+                log.exception(f'Scraping failed for {url}: {e}')
+                if not self.continue_on_failure:
+                    raise
+
+
 class SafeWebBaseLoader(WebBaseLoader):
     """WebBaseLoader with enhanced error handling for URLs."""
 
@@ -927,6 +1021,17 @@ def get_web_loader(
         if playwright_ws_url:
             web_loader_args['playwright_ws_url'] = playwright_ws_url
 
+    if engine == 'scrapling_stealth':
+        WebLoaderClass = SafeScraplingLoader
+        scrapling_timeout = cfg('playwright_timeout', PLAYWRIGHT_TIMEOUT)
+        web_loader_args = {
+            'web_paths': safe_urls,
+            'continue_on_failure': True,
+            'timeout': int(scrapling_timeout) if scrapling_timeout else 30000,
+            'headless': True,
+            'solve_cloudflare': True,
+        }
+
     if engine == 'firecrawl':
         WebLoaderClass = SafeFireCrawlLoader
         web_loader_args['api_key'] = cfg('firecrawl_api_key', FIRECRAWL_API_KEY)
@@ -972,5 +1077,5 @@ def get_web_loader(
     else:
         raise ValueError(
             f'Invalid WEB_LOADER_ENGINE: {engine}. '
-            "Please set it to 'safe_web', 'playwright', 'firecrawl', 'tavily', 'external', or 'microsoft_web_iq'."
+            "Please set it to 'safe_web', 'playwright', 'scrapling_stealth', 'firecrawl', 'tavily', 'external', or 'microsoft_web_iq'."
         )
