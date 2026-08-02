@@ -764,6 +764,59 @@ def validate_url_sync(url):
         return False
 
 
+def _is_cloudflare_block_page(html_content: str) -> bool:
+    """Detect if HTML appears to be a Cloudflare challenge/protection page."""
+    if not html_content.strip():
+        return False
+
+    lower_html = html_content.lower()
+    text_content = _re.sub(r'<[^<]+>', ' ', html_content)
+
+    cf_indicators = [
+        'cloudflare-challenge',
+        'cf-browser-verification',
+        '__cf_chl_',
+        'ray.id',
+        'checking your browser',
+        'ddos-protection',
+        'www.cloudflare.com',
+    ]
+    for indicator in cf_indicators:
+        if indicator in lower_html or indicator in text_content.lower():
+            return True
+
+    meta_match = _re.search(r'meta[^>]*content=["\']([^"\']*)["\'][^>]*(?:refresh|cloudflare)', html_content, _re.IGNORECASE)
+    if meta_match:
+        content_val = meta_match.group(1).lower()
+        if 'cdn-cgi.com' in content_val or 'cloudflare-train.com' in content_val:
+            return True
+
+    title_match = _re.search(r'<title[^>]*>(.*?)</title>', html_content, _re.IGNORECASE)
+    if title_match:
+        title_text = title_match.group(1).lower()
+        for phrase in ['just a moment...', 'please allow', 'browser verification', 'challenge']:
+            if phrase in title_text:
+                return True
+
+    return False
+
+
+def _has_main_content(html_content: str) -> bool:
+    """Quick check whether extracted HTML likely contains real page content."""
+    try:
+        from readability import Document as ReadabilityDocument
+
+        doc = ReadabilityDocument(html_content)
+        summary_html = doc.summary()
+        text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
+        if len(text_content) >= 100:
+            return True
+    except Exception:
+        pass
+
+    return len(html_content.strip()) > 2000
+
+
 class SafeScraplingLoader(BaseLoader):
     """Load URLs with Scrapling StealthyFetcher — undetectable Chromium-based browser with Cloudflare bypass."""
 
@@ -786,6 +839,28 @@ class SafeScraplingLoader(BaseLoader):
     def lazy_load(self) -> Iterator[Document]:
         from scrapling import StealthyFetcher
 
+        def _extract_from_resp(resp, url):
+            html_content = resp.html_content if hasattr(resp, 'html_content') else ''
+            text_content = None
+
+            if html_content.strip():
+                try:
+                    from readability import Document as ReadabilityDocument
+
+                    doc = ReadabilityDocument(html_content)
+                    summary_html = doc.summary()
+                    text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
+                except Exception:
+                    pass
+
+            if not text_content or len(text_content) < 50:
+                try:
+                    text_content = str(resp.get_all_text(separator='\n')).strip()
+                except Exception:
+                    pass
+
+            return text_content or ''
+
         for url in self.urls:
             try:
                 if not validate_url_sync(url):
@@ -794,7 +869,7 @@ class SafeScraplingLoader(BaseLoader):
                 fetch_kwargs = {
                     'headless': self.headless,
                     'timeout': self.timeout,
-                    'solve_cloudflare': self.solve_cloudflare,
+                    'solve_cloudflare': False,
                 }
                 if self.proxy:
                     server = self.proxy.get('server')
@@ -804,26 +879,14 @@ class SafeScraplingLoader(BaseLoader):
                 resp = StealthyFetcher.fetch(url, **fetch_kwargs)
 
                 html_content = resp.html_content if hasattr(resp, 'html_content') else ''
-                text_content = None
 
-                if html_content.strip():
-                    try:
-                        from readability import Document as ReadabilityDocument
+                needs_solve_cf = _is_cloudflare_block_page(html_content) or not _has_main_content(html_content)
 
-                        doc = ReadabilityDocument(html_content)
-                        summary_html = doc.summary()
-                        text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
-                    except Exception:
-                        pass
+                if needs_solve_cf:
+                    fetch_kwargs['solve_cloudflare'] = True
+                    resp = StealthyFetcher.fetch(url, **fetch_kwargs)
 
-                if not text_content or len(text_content) < 50:
-                    try:
-                        text_content = str(resp.get_all_text(separator='\n')).strip()
-                    except Exception:
-                        pass
-
-                if not text_content:
-                    text_content = ''
+                text_content = _extract_from_resp(resp, url)
 
                 yield Document(page_content=text_content, metadata={'source': url})
 
@@ -835,6 +898,28 @@ class SafeScraplingLoader(BaseLoader):
     async def alazy_load(self) -> AsyncIterator[Document]:
         from scrapling import StealthyFetcher
 
+        def _extract_from_resp(resp, url):
+            html_content = resp.html_content if hasattr(resp, 'html_content') else ''
+            text_content = None
+
+            if html_content.strip():
+                try:
+                    from readability import Document as ReadabilityDocument
+
+                    doc = ReadabilityDocument(html_content)
+                    summary_html = doc.summary()
+                    text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
+                except Exception:
+                    pass
+
+            if not text_content or len(text_content) < 50:
+                try:
+                    text_content = str(resp.get_all_text(separator='\n')).strip()
+                except Exception:
+                    pass
+
+            return text_content or ''
+
         for url in self.urls:
             try:
                 if not validate_url_sync(url):
@@ -843,7 +928,7 @@ class SafeScraplingLoader(BaseLoader):
                 fetch_kwargs = {
                     'headless': self.headless,
                     'timeout': self.timeout,
-                    'solve_cloudflare': self.solve_cloudflare,
+                    'solve_cloudflare': False,
                 }
                 if self.proxy:
                     server = self.proxy.get('server')
@@ -853,26 +938,14 @@ class SafeScraplingLoader(BaseLoader):
                 resp = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
 
                 html_content = resp.html_content if hasattr(resp, 'html_content') else ''
-                text_content = None
 
-                if html_content.strip():
-                    try:
-                        from readability import Document as ReadabilityDocument
+                needs_solve_cf = _is_cloudflare_block_page(html_content) or not _has_main_content(html_content)
 
-                        doc = ReadabilityDocument(html_content)
-                        summary_html = doc.summary()
-                        text_content = _re.sub(r'<[^<]+>', '', summary_html).strip()
-                    except Exception:
-                        pass
+                if needs_solve_cf:
+                    fetch_kwargs['solve_cloudflare'] = True
+                    resp = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
 
-                if not text_content or len(text_content) < 50:
-                    try:
-                        text_content = str(resp.get_all_text(separator='\n')).strip()
-                    except Exception:
-                        pass
-
-                if not text_content:
-                    text_content = ''
+                text_content = _extract_from_resp(resp, url)
 
                 yield Document(page_content=text_content, metadata={'source': url})
 
@@ -1062,7 +1135,7 @@ def get_web_loader(
             'continue_on_failure': True,
             'timeout': int(scrapling_timeout) if scrapling_timeout else 30000,
             'headless': True,
-            'solve_cloudflare': True,
+            'solve_cloudflare': False,
         }
 
     if engine == 'firecrawl':
