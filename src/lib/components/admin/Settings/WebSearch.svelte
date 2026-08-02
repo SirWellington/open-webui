@@ -48,7 +48,7 @@
 		'youcom',
 		'linkup'
 	];
-	let webLoaderEngines = ['playwright', 'firecrawl', 'tavily', 'microsoft_web_iq', 'external'];
+	let webLoaderEngines = ['scrapling_stealth', 'playwright', 'firecrawl', 'tavily', 'microsoft_web_iq', 'external'];
 
 	let webConfig: any = null;
 	const inputClass =
@@ -1216,6 +1216,12 @@
 									/>
 								</div>
 							</div>
+						</div>
+					</div>
+				{:else if webConfig.WEB_LOADER_ENGINE === 'scrapling_stealth'}
+					<div class="mb-2.5 flex w-full flex-col">
+						<div class="flex items-center gap-2 rounded-lg border border-gray-100/50 bg-gray-50/40 p-2 text-xs text-gray-600 dark:border-white/[0.04] dark:bg-white/[0.03] dark:text-gray-400">
+							<div>{$i18n.t('Scrapling StealthyFetcher with browser fingerprinting for Cloudflare bypass. Uses PLAYWRIGHT_TIMEOUT setting.')}</div>
 						</div>
 					</div>
 				{:else if webConfig.WEB_LOADER_ENGINE === 'firecrawl' && webConfig.WEB_SEARCH_ENGINE !== 'firecrawl'}
