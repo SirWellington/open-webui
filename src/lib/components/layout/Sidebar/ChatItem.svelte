@@ -365,7 +365,7 @@
 
 	const onClickOutside = (event) => {
 		if (!itemElement.contains(event.target)) {
-			if (confirmEdit) {
+			if (confirmEdit && !generating) {
 				if (chatTitle !== title) {
 					editChatTitle(id, chatTitle);
 				}
