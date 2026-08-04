@@ -17,7 +17,9 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - DO_NOT_TRACK=true
       # Points OpenWebUI to the internal Docling service
-      - DOCLING_API_URL=http://docling-server:80/v1/convert
+      - DOCLING_API_URL=http://docling-server:5001/v1/convert
+      - DOCLING_API_KEY=${DOCLING_API_KEY}
+      - ENABLE_SEARCH_WEB_TOOL=true
     extra_hosts:
       - host.docker.internal:host-gateway
     mem_limit: 8G
@@ -35,9 +37,10 @@ services:
     environment:
       # Limits CPU threads to prevent it from starving your LLM
       - OMP_NUM_THREADS=4
+      - DOCLING_API_KEY=${DOCLING_API_KEY}
     mem_limit: 2G 
     ports:
-      - "3001:80"
+      - "3001:5001"
 
 volumes:
   open-webui:
