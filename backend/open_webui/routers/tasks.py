@@ -193,6 +193,10 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
         },
     }
 
+    # Disable reasoning for Qwen3+ models on task operations so output lands in `content`
+    if task_model_id.lower().find('qwen') != -1:
+        payload['reasoning_effort'] = 'none'
+
     # Process the payload through the pipeline
     try:
         payload = await process_pipeline_inlet_filter(request, payload, user, models)
