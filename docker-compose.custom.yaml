@@ -22,7 +22,7 @@ services:
       - ENABLE_SEARCH_WEB_TOOL=true
     extra_hosts:
       - host.docker.internal:host-gateway
-    mem_limit: 6G
+    mem_limit: 8G
     restart: always
     # GPU support:
     # Linux NVIDIA: add `runtime: nvidia` and install nvidia-container-toolkit
