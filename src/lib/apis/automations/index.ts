@@ -10,6 +10,8 @@ export type AutomationTarget = {
 	channel_id?: string | null;
 };
 
+export type AutomationChatMode = 'new' | 'persistent' | 'custom';
+
 export type AutomationData = {
 	prompt: string;
 	model_id: string;
@@ -27,6 +29,8 @@ export type AutomationForm = {
 		temperature?: number;
 		max_tokens?: number;
 		webhook?: string;
+		chat_mode?: AutomationChatMode;
+		target_chat_id?: string | null;
 	};
 	is_active?: boolean;
 };

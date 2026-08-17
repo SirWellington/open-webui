@@ -38,7 +38,7 @@ from open_webui.models.folders import Folders
 from open_webui.models.messages import MessageForm
 from open_webui.models.users import Users
 from open_webui.utils.auth import create_token
-from open_webui.utils.misc import parse_duration
+from open_webui.utils.misc import get_message_list, parse_duration
 from open_webui.utils.task import prompt_template
 from open_webui.utils.terminals import get_terminal_server_url
 from starlette.datastructures import Headers
@@ -545,50 +545,130 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             await Automations.clear_folder_ids(automation.user_id, [folder_id])
             folder_id = None
 
-        # Generate proper UUIDs for messages (same as frontend)
+        # Determine chat mode: "new" | "persistent" | "custom"
+        meta = automation.meta or {}
+        chat_mode = meta.get('chat_mode', 'new')
+
         user_msg_id = str(uuid4())
         assistant_msg_id = str(uuid4())
+        parent_id: int | None = None  # None = root; value = append to existing
 
-        chat_id = str(uuid4())
-        chat = await Chats.insert_new_chat(
-            chat_id,
-            automation.user_id,
-            ChatForm(
-                folder_id=folder_id,
-                chat={
-                    'title': automation.name,
-                    'models': [model_id],
-                    'history': {
-                        'currentId': assistant_msg_id,
-                        'messages': {
-                            user_msg_id: {
-                                'id': user_msg_id,
-                                'parentId': None,
-                                'role': 'user',
-                                'content': prompt,
-                                'childrenIds': [assistant_msg_id],
-                                'timestamp': int(time.time()),
-                                'models': [model_id],
-                            },
-                            assistant_msg_id: {
-                                'id': assistant_msg_id,
-                                'parentId': user_msg_id,
-                                'role': 'assistant',
-                                'content': '',
-                                'done': False,
-                                'model': model_id,
-                                'childrenIds': [],
-                                'timestamp': int(time.time()),
+        if chat_mode == 'new':
+            # Default behavior: create a fresh chat every run
+            chat_id = str(uuid4())
+            chat = await Chats.insert_new_chat(
+                chat_id,
+                automation.user_id,
+                ChatForm(
+                    folder_id=folder_id,
+                    chat={
+                        'title': automation.name,
+                        'models': [model_id],
+                        'history': {
+                            'currentId': assistant_msg_id,
+                            'messages': {
+                                user_msg_id: {
+                                    'id': user_msg_id,
+                                    'parentId': None,
+                                    'role': 'user',
+                                    'content': prompt,
+                                    'childrenIds': [assistant_msg_id],
+                                    'timestamp': int(time.time()),
+                                    'models': [model_id],
+                                },
+                                assistant_msg_id: {
+                                    'id': assistant_msg_id,
+                                    'parentId': user_msg_id,
+                                    'role': 'assistant',
+                                    'content': '',
+                                    'done': False,
+                                    'model': model_id,
+                                    'childrenIds': [],
+                                    'timestamp': int(time.time()),
+                                },
                             },
                         },
+                        'messages': [
+                            {'role': 'user', 'content': prompt},
+                        ],
+                        'meta': {'automation_id': automation.id},
                     },
-                    'messages': [
-                        {'role': 'user', 'content': prompt},
-                    ],
-                    'meta': {'automation_id': automation.id},
-                },
-            ),
-        )
+                ),
+            )
+
+        elif chat_mode in ('persistent', 'custom'):
+            target_chat_id = meta.get('target_chat_id')
+            existing_chat = None
+
+            if target_chat_id:
+                existing_chat = await Chats.get_chat_by_id(target_chat_id)
+                # Validate ownership and existence
+                if not existing_chat or existing_chat.user_id != automation.user_id:
+                    if chat_mode == 'custom':
+                        error = f'Target chat "{target_chat_id}" not found'
+                        await _record_run(automation.id, 'error', error=error)
+                        await publish_event(
+                            app,
+                            EVENTS.AUTOMATION_RUN_FAILED,
+                            actor=user,
+                            subject_id=automation.id,
+                            data={'name': automation.name, 'error': error},
+                        )
+                        return
+                    # Persistent mode: treat as missing (will create below)
+                    existing_chat = None
+
+            if not existing_chat:
+                # Create a fresh chat
+                chat_id = str(uuid4())
+                chat = await Chats.insert_new_chat(
+                    chat_id,
+                    automation.user_id,
+                    ChatForm(
+                        folder_id=folder_id,
+                        chat={
+                            'title': automation.name,
+                            'models': [model_id],
+                            'history': {
+                                'currentId': assistant_msg_id,
+                                'messages': {
+                                    user_msg_id: {
+                                        'id': user_msg_id,
+                                        'parentId': None,
+                                        'role': 'user',
+                                        'content': prompt,
+                                        'childrenIds': [assistant_msg_id],
+                                        'timestamp': int(time.time()),
+                                        'models': [model_id],
+                                    },
+                                    assistant_msg_id: {
+                                        'id': assistant_msg_id,
+                                        'parentId': user_msg_id,
+                                        'role': 'assistant',
+                                        'content': '',
+                                        'done': False,
+                                        'model': model_id,
+                                        'childrenIds': [],
+                                        'timestamp': int(time.time()),
+                                    },
+                                },
+                            },
+                            'messages': [
+                                {'role': 'user', 'content': prompt},
+                            ],
+                            'meta': {'automation_id': automation.id},
+                        },
+                    ),
+                )
+                # Save the new chat ID for future persistent runs
+                if chat and chat_mode == 'persistent':
+                    await Automations.update_meta(automation.id, {'target_chat_id': chat.id})
+
+            else:
+                # Append to existing conversation
+                chat = existing_chat
+                chat_id = chat.id
+                parent_id = Chats.get_current_message_id(chat.chat)
 
         if not chat:
             error = 'Failed to create chat'
@@ -618,19 +698,34 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         # Resolve model defaults (frontend does this, backend doesn't)
         tool_ids, features, filter_ids, terminal_id = await _resolve_model_defaults(app, model_id)
 
+        # Build messages list: for existing chats include full conversation history
+        if parent_id is not None and chat.chat.get('history'):
+            messages_map = chat.chat['history'].get('messages', {})
+            all_messages = get_message_list(messages_map, parent_id) or []
+            form_messages = [
+                {'role': m['role'], 'content': m.get('content', '')}
+                for m in all_messages
+                if isinstance(m, dict) and m.get('role') in ('user', 'assistant')
+            ]
+        else:
+            form_messages = [{'role': 'user', 'content': prompt}]
+
         # Build the same payload the frontend sends to /api/chat/completions
         form_data = {
             'model': model_id,
-            'messages': [{'role': 'user', 'content': prompt}],
+            'messages': form_messages,
             'stream': True,
             'chat_id': chat.id,
             'id': assistant_msg_id,
-            'parent_id': None,  # Root message (chat already created above)
+            'parent_id': parent_id,  # None = root; value = append to existing conversation
             'user_message': {
                 'id': user_msg_id,
-                'parentId': None,
+                'parentId': parent_id,
                 'role': 'user',
                 'content': prompt,
+                'childrenIds': [assistant_msg_id],
+                'timestamp': int(time.time()),
+                'models': [model_id],
             },
             'session_id': f'automation:{automation.id}',
             'automation_id': automation.id,

@@ -236,7 +236,10 @@ class AutomationTable:
             row.name = form.name
             row.folder_id = form.folder_id
             row.data = form.data.model_dump()
-            row.meta = form.meta
+            if form.meta is not None:
+                current_meta = row.meta or {}
+                current_meta.update(form.meta)
+                row.meta = current_meta
             if form.is_active is not None:
                 row.is_active = form.is_active
             row.next_run_at = next_run_at
@@ -285,6 +288,21 @@ class AutomationTable:
             await db.delete(row)
             await db.commit()
             return True
+
+    async def update_meta(
+        self, id: str, meta_patch: dict, db: Optional[AsyncSession] = None
+    ) -> Optional[AutomationModel]:
+        """Merge-update the meta JSON field without overwriting existing keys."""
+        async with get_async_db_context(db) as db:
+            row = await db.get(Automation, id)
+            if not row:
+                return None
+            current = row.meta or {}
+            current.update(meta_patch)
+            row.meta = current
+            row.updated_at = int(time.time())
+            await db.commit()
+            return AutomationModel.model_validate(row)
 
     async def claim_due(self, now_ns: int, limit: int = 10, db: Optional[AsyncSession] = None) -> list[AutomationModel]:
         """

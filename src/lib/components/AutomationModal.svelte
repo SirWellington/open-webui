@@ -9,6 +9,7 @@
 	import ScheduleDropdown from '$lib/components/automations/ScheduleDropdown.svelte';
 	import ModelDropdown from '$lib/components/automations/ModelDropdown.svelte';
 	import DestinationDropdown from '$lib/components/automations/DestinationDropdown.svelte';
+	import ChatTargetDropdown from '$lib/components/automations/ChatTargetDropdown.svelte';
 	import { getFolders } from '$lib/apis/folders';
 	import { getChannels } from '$lib/apis/channels';
 	import { channels, folders } from '$lib/stores';
@@ -17,7 +18,8 @@
 		createAutomation,
 		updateAutomationById,
 		type AutomationForm,
-		type AutomationResponse
+		type AutomationResponse,
+		type AutomationChatMode
 	} from '$lib/apis/automations';
 
 	const i18n = getContext('i18n');
@@ -34,6 +36,9 @@
 	let target_type: 'chat' | 'channel' = 'chat';
 	let channel_id = '';
 	let is_active = true;
+	let chat_mode: AutomationChatMode = 'new';
+	let target_chat_id = '';
+	let savedTargetChatId = '';
 
 	let loading = false;
 	let foldersLoaded = false;
@@ -69,6 +74,13 @@
 					rrule: scheduleDropdown.buildRrule(),
 					target: target_type === 'channel' ? { type: 'channel', channel_id } : { type: 'chat' }
 				},
+				meta: {
+					chat_mode: chat_mode !== 'new' ? chat_mode : undefined,
+					target_chat_id:
+						chat_mode === 'new'
+							? null
+							: target_chat_id || (automation?.meta?.target_chat_id ?? null)
+				},
 				is_active
 			};
 
@@ -83,8 +95,8 @@
 				show = false;
 				dispatch('save', { id: created?.id });
 			}
-		} catch (e: any) {
-			toast.error(e?.detail ?? `${e}` ?? 'Failed to save');
+		} catch (e: unknown) {
+			toast.error(e instanceof Error ? e.message : String(e));
 		} finally {
 			loading = false;
 		}
@@ -111,6 +123,10 @@
 			target_type = automation.data.target?.type === 'channel' ? 'channel' : 'chat';
 			channel_id = automation.data.target?.channel_id ?? '';
 			is_active = automation.is_active;
+			const meta = automation.meta || {};
+			chat_mode = meta.chat_mode ?? 'new';
+			target_chat_id = meta.target_chat_id ?? '';
+			savedTargetChatId = target_chat_id;
 			if (scheduleDropdown) {
 				scheduleDropdown.parseRrule(automation.data.rrule);
 			}
@@ -128,6 +144,10 @@
 				? (cloneFrom.data.target?.channel_id ?? '')
 				: '';
 			is_active = true;
+			const meta = cloneFrom.meta || {};
+			chat_mode = meta.chat_mode ?? 'new';
+			target_chat_id = meta.target_chat_id ?? '';
+			savedTargetChatId = target_chat_id;
 			if (scheduleDropdown) {
 				scheduleDropdown.parseRrule(cloneFrom.data.rrule);
 			}
@@ -139,6 +159,9 @@
 			target_type = 'chat';
 			channel_id = '';
 			is_active = true;
+			chat_mode = 'new';
+			target_chat_id = '';
+			savedTargetChatId = '';
 		}
 	};
 
@@ -174,7 +197,7 @@
 				bind:value={prompt}
 				rows={8}
 				placeholder={$i18n.t('Enter prompt here.')}
-			/>
+			></textarea>
 		</div>
 
 		<!-- Bottom toolbar -->
@@ -195,6 +218,22 @@
 					side="top"
 					align="start"
 				/>
+
+				<!-- Chat Mode Selector -->
+				<div class="flex items-center gap-0.5">
+					<select
+						bind:value={chat_mode}
+						class="h-8 max-w-[11rem] px-2.5 py-1.5 bg-transparent rounded-2xl text-xs font-normal text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer outline-hidden appearance-none"
+					>
+						<option value="new">{$i18n.t('New chat each run')}</option>
+						<option value="persistent">{$i18n.t('Persistent chat')}</option>
+						<option value="custom">{$i18n.t('Custom chat')}</option>
+					</select>
+
+				{#if chat_mode !== 'new'}
+					<ChatTargetDropdown bind:target_chat_id side="top" align="start" />
+				{/if}
+				</div>
 			</div>
 
 			<div class="flex items-center justify-end gap-2 shrink-0">

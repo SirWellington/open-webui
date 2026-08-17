@@ -40,6 +40,12 @@
 	/** Callback when dropdown closes */
 	export let onClose: () => void = () => {};
 
+	/** Callback when dropdown opens */
+	export let onOpen: () => void = () => {};
+
+	/** Called with the content element ref for custom scroll listeners */
+	export let onContentReady: (el: HTMLElement) => void = () => {};
+
 	export let open = false;
 
 	let triggerEl;
@@ -96,8 +102,10 @@
 	async function toggleOpen() {
 		open = !open;
 		if (open) {
+			onOpen();
 			await tick();
 			positionContent();
+			onContentReady(contentEl);
 		}
 	}
 
