@@ -57,15 +57,27 @@
 			? (($folders ?? []).find((folder) => folder.id === folderId)?.name ?? $i18n.t('None'))
 			: $i18n.t('None');
 
-	const formatTime = (ts: number | null): string => {
-		if (!ts) return '-';
-		return new Date(ts / 1_000_000).toLocaleString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	};
+		const formatTime = (ts: number | null): string => {
+			if (!ts) return '-';
+			return new Date(ts / 1_000_000).toLocaleString(undefined, {
+				month: 'short',
+				day: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
+		};
+
+		const chatModeLabel = (mode: string | undefined): string => {
+			if (!mode || mode === 'new') return $i18n.t('New chat each run');
+			if (mode === 'persistent') return $i18n.t('Persistent chat');
+			if (mode === 'custom') return $i18n.t('Custom chat');
+			return mode;
+		};
+
+		const targetChatId = (): string | null => {
+			const meta = automation.meta || {};
+			return meta.target_chat_id ?? null;
+		};
 
 	const formatNextRun = (ts: number | null): string => {
 		if (!ts) return $i18n.t('Not scheduled');
@@ -293,6 +305,25 @@
 			</span>
 			<span class="min-w-0 truncate text-xs text-gray-700 dark:text-gray-300">
 				{automation.data.model_id}
+			</span>
+		</div>
+
+		<div class="flex h-7 items-center px-3">
+			<span class="w-24 shrink-0 text-[11px] text-gray-400 dark:text-gray-500">
+				{$i18n.t('Chat mode')}
+			</span>
+			<span class="min-w-0 flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
+				{chatModeLabel((automation.meta || {}).chat_mode)}
+				{#if targetChatId()}
+					<button
+						class="group flex items-center gap-1 text-[0.6875rem] text-gray-400"
+						on:click={() => goto(`/c/${targetChatId()}`)}
+						type="button"
+					>
+						<span class="group-hover:underline">{$i18n.t('View chat')}</span>
+						<ArrowRight className="size-2.5" strokeWidth="2" />
+					</button>
+				{/if}
 			</span>
 		</div>
 
