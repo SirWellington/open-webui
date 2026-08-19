@@ -1190,7 +1190,7 @@ WEB_SEARCH_DOMAIN_FILTER_LIST = web_search_domain_filter_list
 WEB_SEARCH_CONCURRENT_REQUESTS = int(os.getenv('WEB_SEARCH_CONCURRENT_REQUESTS', '0'))
 
 WEB_FETCH_MAX_CONTENT_LENGTH = (
-    int(os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH', '15000')) if os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH') is not None else 15000
+    int(os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH')) if os.getenv('WEB_FETCH_MAX_CONTENT_LENGTH') else None
 )
 
 WEB_LOADER_ENGINE = os.getenv('WEB_LOADER_ENGINE', '')
