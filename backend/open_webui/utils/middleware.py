@@ -1003,6 +1003,23 @@ async def apply_source_context_to_messages(
         )
 
 
+def _extract_markdown_payload(md_field):
+    """Return the readable markdown from a Crawl4AI result's 'markdown' field.
+
+    The 'md' endpoint returns it as a plain string, while 'crawl' returns it
+    as a dict ({'raw_markdown', 'markdown_with_citations', ...}). Returns
+    None if no usable markdown is present.
+    """
+    if isinstance(md_field, str) and md_field.strip():
+        return md_field
+    if isinstance(md_field, dict):
+        for key in ('raw_markdown', 'markdown_with_citations', 'fit_markdown'):
+            val = md_field.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+    return None
+
+
 async def process_tool_result(
     request,
     tool_function_name,
@@ -1200,6 +1217,27 @@ async def process_tool_result(
 
     if isinstance(tool_result, list):
         tool_result = {'results': tool_result}
+
+    # Crawl4AI (md/crawl via mcpo) wraps the useful payload in a JSON envelope.
+    # Surface the clean markdown text instead of the raw envelope so the chat
+    # tool-result panel shows readable content.
+    if isinstance(tool_result, dict):
+        _md_payload = _extract_markdown_payload(tool_result.get('markdown'))
+        if _md_payload:
+            _url = tool_result.get('url')
+            tool_result = f'🔗 {_url}\n\n{_md_payload}' if _url else _md_payload
+        elif isinstance(tool_result.get('results'), list):
+            _parts = []
+            for _r in tool_result['results']:
+                if not isinstance(_r, dict):
+                    continue
+                _rmd = _extract_markdown_payload(_r.get('markdown'))
+                if not _rmd:
+                    continue
+                _u = _r.get('url')
+                _parts.append(f'🔗 {_u}\n\n{_rmd}' if _u else _rmd)
+            if _parts:
+                tool_result = '\n\n---\n\n'.join(_parts)
 
     if isinstance(tool_result, dict) or isinstance(tool_result, list):
         tool_result = json.dumps(tool_result, indent=2, ensure_ascii=False)
