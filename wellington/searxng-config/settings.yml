@@ -1,0 +1,80 @@
+# SearXNG configuration for the OpenWebUI web-search instance
+# Docs: https://docs.searxng.org/admin/settings/
+#
+# Engine pool notes:
+# - `inactive: false` is required on `google`/`braveapi` — the image default marks them inactive
+# - `braveapi` = official Brave Search API (consumes the 1000 req/mo quota, 1 call per query)
+# - `brave` = free scraper fallback (no quota); keeps working if the API quota runs out
+# - engines listed under "kept off" are loaded but excluded from the pool
+
+use_default_settings: true
+
+server:
+  secret_key: !process "env:SEARXNG_SECRET"
+  image_proxy: true
+  method: "GET"
+  limiter: false
+
+search:
+  proxy: false
+  default_lang: "en"
+  safe_search: 0
+  # Disable autocomplete to save resources and avoid sending queries to search engines.
+  autocomplete: ""
+  formats:
+    - html
+    - json
+  enabled_settings:
+    - language
+    - safe_search
+    - time_range
+    - weight
+
+outgoing:
+  # 3.0s was dropping slow engines (brave/yahoo) mid-request
+  request_timeout: 5.0
+
+engines:
+  # --- core pool (active) ---
+  - name: google cse
+    weight: 5.0
+
+  - name: google
+    inactive: false
+    weight: 4.0
+
+  - name: duckduckgo
+    weight: 3.0
+
+  - name: braveapi
+    inactive: false
+    api_key: !process "env:SEARXNG_BRAVE_API_KEY"
+    weight: 3.0
+
+  - name: brave
+    weight: 2.0
+
+  - name: mojeek
+    disabled: false
+    weight: 2.0
+
+  - name: wikipedia
+    weight: 2.0
+
+  - name: yahoo
+    disabled: false
+    weight: 1.0
+
+  # --- kept off (CAPTCHA/blocked/noisy) ---
+  - name: bing
+    disabled: true
+
+  - name: qwant
+    disabled: true
+
+  - name: startpage
+    disabled: true
+
+plugins:
+  searx.plugins.oa_doi_rewrite.SXNGPlugin:
+    active: true
