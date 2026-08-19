@@ -311,3 +311,9 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 .cptr
+
+# --- Wellington custom (local additions; re-apply after upstream merges if dropped) ---
+.backup/
+.opencode/
+wellington/memory.md
+wellington/mcpo.json
