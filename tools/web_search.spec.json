@@ -1,0 +1,188 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ihor-sokoliuk/mcp-searxng",
+    "description": "ihor-sokoliuk/mcp-searxng MCP Server",
+    "version": "1.15.0"
+  },
+  "paths": {
+    "/searxng_web_search": {
+      "post": {
+        "summary": "Search Web",
+        "description": "Search the web via SearXNG. Returns up to 10 results, each with a title, URL, and a snippet. The required parameter is exactly `query` (not `prompt` or `q`). Optional: `num_results` (1-10), `time_range` (day/week/month/year), `language`, `safesearch` (0/1/2), `min_score` (0.0-1.0), `pageno` (pagination), `categories`/`engines` (narrow the search), `result_detail` (full/compact). To read a result page in full, follow up with the `md` tool (Crawl4AI).",
+        "operationId": "search_web",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/searxng_web_search_form_model"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Tool Searxng Web Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "searxng_web_search_form_model": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "The search query string. This is the required parameter name — use exactly `query`, not `prompt` or `q`."
+          },
+          "pageno": {
+            "type": "integer",
+            "title": "Pageno",
+            "description": "Search page number (starts at 1)",
+            "default": 1
+          },
+          "time_range": {
+            "type": "string",
+            "title": "Time Range",
+            "description": "Time range of search (day, week, month, year)"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "description": "Language code for search results (e.g., 'en', 'fr', 'de'). Default is instance-dependent.",
+            "default": "all"
+          },
+          "safesearch": {
+            "type": "string",
+            "title": "Safesearch",
+            "description": "Safe search filter level (0: None, 1: Moderate, 2: Strict)"
+          },
+          "min_score": {
+            "type": "number",
+            "title": "Min Score",
+            "description": "Minimum relevance score threshold from 0.0 to 1.0. Results below this score are filtered out."
+          },
+          "num_results": {
+            "type": "number",
+            "title": "Num Results",
+            "description": "Maximum number of results to return (1-20). Operator cap SEARXNG_MAX_RESULTS applies as a ceiling."
+          },
+          "categories": {
+            "type": "string",
+            "title": "Categories",
+            "description": "Comma-separated SearXNG categories to restrict the search (e.g. general, news, images, science, it). If omitted, the instance default is used."
+          },
+          "engines": {
+            "type": "string",
+            "title": "Engines",
+            "description": "Comma-separated SearXNG engine names to query (e.g. google, bing, duckduckgo). If omitted, the instance default is used."
+          },
+          "response_format": {
+            "type": "string",
+            "title": "Response Format",
+            "description": "Response format: formatted text for agents or raw JSON for programmatic clients. If omitted, SEARXNG_DEFAULT_RESPONSE_FORMAT applies; if unset or invalid, text is used. An explicit response_format always takes precedence."
+          },
+          "result_detail": {
+            "type": "string",
+            "title": "Result Detail",
+            "description": "Result detail: full preserves SearXNG metadata and search signals; compact returns only title, URL, and content-snippet fields for each result (JSON keys: title, url, content). If omitted, full is used."
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "searxng_web_search_form_model"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/searxng"
+    }
+  ]
+}

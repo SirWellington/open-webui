@@ -1,0 +1,344 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Crawl4AI API",
+    "description": "Crawl4AI API MCP Server",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/md": {
+      "post": {
+        "summary": "Md",
+        "description": "Convert a web page into Markdown format.\n\nSupports multiple extraction modes:\n- fit (default): Readability-based extraction for clean content\n- raw: Direct DOM to Markdown conversion\n- bm25: BM25 relevance ranking with optional query\n- llm: LLM-based summarization with optional query\n\nUse this tool when you need clean, readable text from web pages.",
+        "operationId": "md",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/md_form_model"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Tool Md Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/crawl": {
+      "post": {
+        "summary": "Crawl",
+        "description": "Crawl a list of URLs and return the results as JSON.\nFor streaming responses, use /crawl/stream endpoint.\nSupports optional user-provided hook functions for customization.",
+        "operationId": "crawl",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/crawl_form_model"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Tool Crawl Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "crawl_form_model": {
+        "properties": {
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Urls",
+            "description": ""
+          },
+          "browser_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Browser Config",
+            "description": ""
+          },
+          "crawler_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawler Config",
+            "description": ""
+          },
+          "crawler_configs": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawler Configs",
+            "description": "List of per-URL CrawlerRunConfig dicts for arun_many(). When provided, each config can include a 'url_matcher' pattern to match against specific URLs. Takes precedence over crawler_config."
+          },
+          "hooks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/crawl_form_model_hooks_choice_0_model"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional user-provided hook functions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "urls"
+        ],
+        "title": "crawl_form_model"
+      },
+      "crawl_form_model_hooks_choice_0_model": {
+        "properties": {
+          "hooks": {
+            "items": {
+              "$ref": "#/components/schemas/crawl_form_model_hooks_choice_0_model_hooks_item_model"
+            },
+            "type": "array",
+            "title": "Hooks",
+            "description": "Declarative hook specs (action + params), max 10"
+          },
+          "timeout": {
+            "type": "integer",
+            "title": "Timeout",
+            "description": "Timeout in seconds for each hook execution",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "title": "crawl_form_model_hooks_choice_0_model"
+      },
+      "crawl_form_model_hooks_choice_0_model_hooks_item_model": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "One of the registered hook actions"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Action parameters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "crawl_form_model_hooks_choice_0_model_hooks_item_model"
+      },
+      "md_form_model": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Absolute http/https URL to fetch"
+          },
+          "f": {
+            "type": "string",
+            "title": "F",
+            "description": ""
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q",
+            "description": "Query string used by BM25/LLM filters"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C",
+            "description": "Cache‑bust / revision counter",
+            "default": "0"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "LLM provider override (e.g., 'anthropic/claude-3-opus')"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature",
+            "description": "LLM temperature override (0.0-2.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "md_form_model"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/crawl4ai"
+    }
+  ]
+}
