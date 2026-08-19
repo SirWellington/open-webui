@@ -14,12 +14,15 @@ services:
       - WEB_LOADER_ENGINE=scrapling_stealth
       - PLAYWRIGHT_TIMEOUT=60000
       - WHISPER_MODEL=base
-      - SESSION_SECRET=${SESSION_SECRET}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
       - DO_NOT_TRACK=true
       # Points OpenWebUI to the internal Docling service
       - DOCLING_API_URL=http://docling-server:5001/v1/convert
       - DOCLING_API_KEY=${DOCLING_API_KEY}
       - ENABLE_SEARCH_WEB_TOOL=true
+      - EXTERNAL_WEB_LOADER_URL=http://crawl4ai:11235/crawl
+      - EXTERNAL_WEB_LOADER_API_KEY=${CRAWL4AI_API_KEY}
+      - CRAWL4AI_API_KEY=${CRAWL4AI_API_KEY}
     extra_hosts:
       - host.docker.internal:host-gateway
     mem_limit: 8G
@@ -42,6 +45,67 @@ services:
     ports:
       - "3001:5001"
 
+  # Crawl4AI Web Crawler Service
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: crawl4ai
+    restart: always
+    mem_limit: 4G
+    environment:
+      - GUNICORN_BIND=0.0.0.0:11235
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_KEY}
+    ports:
+      - "11235:11235"
+
+  # SearXNG Metasearch Engine (JSON API for OpenWebUI web search)
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: searxng
+    restart: always
+    mem_limit: 1G
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./searxng-config/:/etc/searxng/:Z
+      - searxng-core-data:/var/cache/searxng/
+
+  # SearXNG MCP Server (ihor-sokoliuk/mcp-searxng): streamable HTTP on :3000/mcp
+  # Only searxng_web_search is exposed (other tools disabled in mcpo.json).
+  searxng-mcp:
+    image: isokoliuk/mcp-searxng:latest
+    container_name: searxng-mcp
+    restart: always
+    mem_limit: 512M
+    depends_on:
+      - searxng
+    environment:
+      - MCP_HTTP_HOST=0.0.0.0
+      - MCP_HTTP_PORT=3000
+      - SEARXNG_URL=http://searxng:8080
+      - SEARXNG_MAX_RESULTS=10
+
+  # mcpo: MCP -> OpenAPI bridge (searxng + crawl4ai MCP servers -> REST/OpenAPI for OpenWebUI)
+  mcpo:
+    image: ghcr.io/open-webui/mcpo:main
+    container_name: mcpo
+    restart: always
+    depends_on:
+      - crawl4ai
+      - searxng-mcp
+    volumes:
+      - ./mcpo.json:/app/mcpo.json
+    command:
+      - --port
+      - "8000"
+      - --api-key
+      - ${MCPO_API_KEY}
+      - --config
+      - /app/mcpo.json
+      - --hot-reload
+    ports:
+      - "127.0.0.1:8085:8000"
+
 volumes:
   open-webui:
     external: true
+  searxng-core-data:
