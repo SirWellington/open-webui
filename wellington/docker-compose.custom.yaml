@@ -14,7 +14,7 @@ services:
       - WEB_LOADER_ENGINE=safe_web
       - PLAYWRIGHT_TIMEOUT=60000
       - WHISPER_MODEL=base
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - SESSION_SECRET=${SESSION_SECRET}
       - DO_NOT_TRACK=true
       # Points OpenWebUI to the internal Docling service
       - DOCLING_API_URL=http://docling-server:5001/v1/convert
@@ -54,6 +54,17 @@ services:
     environment:
       - GUNICORN_BIND=0.0.0.0:11235
       - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_KEY}
+      # LLM content filter (md f:llm) -> local LM Studio on the Docker host
+      - LLM_PROVIDER=openai/qwen/qwen3.8-27b
+      - OPENAI_BASE_URL=http://host.docker.internal:1234/v1
+      - OPENAI_API_KEY=lm-studio
+      - LLM_TEMPERATURE=0.1
+      # Qwen3.8 thinking control, injected by the c4ai_llm_thinking.py hook (low = faster f:llm; none = off)
+      - LLM_REASONING_EFFORT=low
+    volumes:
+      # Additive runtime hook: feeds LLM_REASONING_EFFORT into the LLM filter's extra_args (see tools/c4ai-llm-patch)
+      - ./tools/c4ai-llm-patch/c4ai_llm_thinking.py:/usr/local/lib/python3.12/site-packages/c4ai_llm_thinking.py:ro
+      - ./tools/c4ai-llm-patch/zz_c4ai_llm.pth:/usr/local/lib/python3.12/site-packages/zz_c4ai_llm.pth:ro
     ports:
       - "11235:11235"
 
