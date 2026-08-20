@@ -77,8 +77,25 @@ services:
     environment:
       - SEARXNG_SECRET=${SEARXNG_SECRET}
       - SEARXNG_BRAVE_API_KEY=${SEARXNG_BRAVE_API_KEY}
+      # SearXNG loads its user settings from this file (the expanded template).
+      - SEARXNG_SETTINGS_PATH=/run/searxng/settings.yml
     ports:
       - "8081:8080"
+    # Current SearXNG no longer supports the legacy `!process "env:..."` YAML tag
+    # (container used to crash-loop with: "could not determine a constructor for
+    # the tag '!process'"). Expand the two secret placeholders in the tracked
+    # settings.yml template from the env vars at start into a container-local
+    # file (never written back to the host), then exec the image's entrypoint.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /run/searxng
+        sed -e "s/__SEARXNG_SECRET__/${SEARXNG_SECRET}/g" \
+            -e "s/__SEARXNG_BRAVE_API_KEY__/${SEARXNG_BRAVE_API_KEY}/g" \
+            /etc/searxng/settings.yml > /run/searxng/settings.yml
+        [ -s /run/searxng/settings.yml ] || { echo "ERROR: generated settings.yml is empty" >&2; exit 1; }
+        exec /usr/local/searxng/entrypoint.sh
     volumes:
       - ./searxng-config/:/etc/searxng/:Z
       - searxng-core-data:/var/cache/searxng/
