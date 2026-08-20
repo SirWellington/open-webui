@@ -6,11 +6,18 @@
 # - `braveapi` = official Brave Search API (consumes the 1000 req/mo quota, 1 call per query)
 # - `brave` = free scraper fallback (no quota); keeps working if the API quota runs out
 # - engines listed under "kept off" are loaded but excluded from the pool
+#
+# NOTE: this file is a template. Current SearXNG no longer supports the legacy
+# `!process "env:..."` YAML tag, so the two secret values are `__PLACEHOLDERS__`
+# that the searxng service's `entrypoint` override (docker-compose.custom.yaml)
+# expands from the SEARXNG_SECRET / SEARXNG_BRAVE_API_KEY env vars at container
+# start into /run/searxng/settings.yml (loaded via SEARXNG_SETTINGS_PATH).
+# Keep real secrets out of this file (it is tracked by git).
 
 use_default_settings: true
 
 server:
-  secret_key: !process "env:SEARXNG_SECRET"
+  secret_key: "__SEARXNG_SECRET__"
   image_proxy: true
   method: "GET"
   limiter: false
@@ -48,7 +55,7 @@ engines:
 
   - name: braveapi
     inactive: false
-    api_key: !process "env:SEARXNG_BRAVE_API_KEY"
+    api_key: "__SEARXNG_BRAVE_API_KEY__"
     weight: 3.0
 
   - name: brave
