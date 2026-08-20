@@ -90,6 +90,8 @@ services:
     container_name: searxng-mcp
     restart: always
     mem_limit: 512M
+    ports:
+      - "127.0.0.1:3100:3000"
     depends_on:
       - searxng
     environment:
