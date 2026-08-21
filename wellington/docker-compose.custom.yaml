@@ -92,6 +92,7 @@ services:
     environment:
       - SEARXNG_SECRET=${SEARXNG_SECRET}
       - SEARXNG_BRAVE_API_KEY=${SEARXNG_BRAVE_API_KEY}
+      - SEARXNG_TAVILY_API_KEY=${SEARXNG_TAVILY_API_KEY}
       # SearXNG loads its user settings from this file (the expanded template).
       - SEARXNG_SETTINGS_PATH=/run/searxng/settings.yml
     ports:
@@ -108,11 +109,15 @@ services:
         mkdir -p /run/searxng
         sed -e "s/__SEARXNG_SECRET__/${SEARXNG_SECRET}/g" \
             -e "s/__SEARXNG_BRAVE_API_KEY__/${SEARXNG_BRAVE_API_KEY}/g" \
+            -e "s/__SEARXNG_TAVILY_API_KEY__/${SEARXNG_TAVILY_API_KEY}/g" \
             /etc/searxng/settings.yml > /run/searxng/settings.yml
         [ -s /run/searxng/settings.yml ] || { echo "ERROR: generated settings.yml is empty" >&2; exit 1; }
         exec /usr/local/searxng/entrypoint.sh
     volumes:
       - ./searxng-config/:/etc/searxng/:Z
+      # Custom Tavily engine: mounted into SearXNG's engines package so the
+      # `engine: tavily` entry in settings.yml resolves to our module.
+      - ./searxng-engines/tavily.py:/usr/local/searxng/searx/engines/tavily.py:ro
       - searxng-core-data:/var/cache/searxng/
 
   # SearXNG MCP Server (ihor-sokoliuk/mcp-searxng): streamable HTTP on :3000/mcp
