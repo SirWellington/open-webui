@@ -25,9 +25,10 @@ wellington/
 │   ├── web_search.spec.json
 │   ├── crawl4ai.spec.json
 │   ├── make_inline_specs.py
-│   └── c4ai-llm-patch/   # optional Crawl4AI thinking/LLM patch
+│   ├── c4ai-llm-patch/     # Crawl4AI thinking/LLM hook (site-packages .pth)
+│   └── c4ai-monitor-patch/ # Crawl4AI monitor retention patch (24h, version-pinned)
 ├── searxng-config/
-│   └── settings.yml      # SearXNG engine config (secrets via !process "env:…")
+│   └── settings.yml      # SearXNG config template (__SEARXNG_*__ placeholders, expanded at start)
 ├── docker-compose.custom.yaml   # full stack (owui + docling + crawl4ai + searxng + mcpo)
 ├── mcpo.json             # MCP→OpenAPI bridge config (Holds the Crawl4AI Bearer token) [gitignored]
 ├── mcpo.json.example     # committed template for mcpo.json
@@ -35,6 +36,7 @@ wellington/
 ├── memory.md             # local agent notes [gitignored]
 ├── sync.ps1              # Windows: status / rebase onto upstream/main
 ├── sync.sh               # Linux/macOS: status / rebase onto upstream/main
+├── UPGRADING.md          # Docker dependency upgrade runbook (for coding agents)
 └── README.md
 ```
 
@@ -106,24 +108,33 @@ cp wellington/mcpo.json.example wellington/mcpo.json
 
 ### 3. SearXNG config
 
-`wellington/searxng-config/settings.yml` references the two SearXNG secrets via
-SearXNG's env indirection, so no secrets are stored in it:
-
-```yaml
-server:
-  secret_key: !process "env:SEARXNG_SECRET"
-engines:
-  - name: braveapi
-    api_key: !process "env:SEARXNG_BRAVE_API_KEY"
-```
-
-The compose file injects `SEARXNG_SECRET` / `SEARXNG_BRAVE_API_KEY` into the `searxng`
-service from the repo-root `.env`.
+`wellington/searxng-config/settings.yml` is a **template**: the two SearXNG secrets are
+`__SEARXNG_SECRET__` / `__SEARXNG_BRAVE_API_KEY__` placeholders (current SearXNG no longer
+supports the legacy `!process "env:…"` YAML tag, which used to crash-loop the container).
+The compose `entrypoint` expands them from the `SEARXNG_SECRET` / `SEARXNG_BRAVE_API_KEY`
+env vars (injected from the repo-root `.env`) into a container-local file at start, then
+execs the image's entrypoint. No real secrets are stored in the tracked file.
 
 ### 4. Crawl4AI LLM patch (optional)
 
-`wellington/tools/c4ai-llm-patch/` contains an optional thinking/LLM patch for Crawl4AI.
-Apply it to the Crawl4AI container only if you need that behavior.
+`wellington/tools/c4ai-llm-patch/` contains a thinking/LLM hook for Crawl4AI's LLM content
+filter (`f:llm`). It is **already mounted** by the compose file: a `.pth` in site-packages
+auto-loads `c4ai_llm_thinking.py`, which injects Qwen3.8 thinking control
+(`LLM_REASONING_EFFORT` etc.) into litellm's `extra_body`. The hook is a no-op unless
+`LLM_REASONING_EFFORT` is set, and it swallows its own import errors — so after a Crawl4AI
+version bump you must *verify* it still works (see `UPGRADING.md`).
+
+### 5. Crawl4AI monitor patch (retention)
+
+`wellington/tools/c4ai-monitor-patch/monitor.py` is a **version-pinned snapshot** of the
+`unclecode/crawl4ai:0.9.2` image's `/app/monitor.py`, with a 3-line change: request/error
+history is now kept for **24h** instead of 5 minutes. Without it, the monitor's in-memory
+deques are purged every 5 min (`server.py` `_timeline_updater`), so the dashboard's
+"Requests" panel is empty whenever you look at it (only the Redis-backed endpoint stats
+survive). The file is bind-mounted over the container's `/app/monitor.py`.
+
+**Bumping the `unclecode/crawl4ai` image tag without re-applying this patch silently
+reverts retention to 5 minutes** — see `UPGRADING.md` for the re-apply steps.
 
 ---
 
@@ -149,6 +160,13 @@ Services started:
 The in-app **web-fetch engine is `safe_web`** (set in the compose `environment`).
 The earlier Scrapling stealth fetcher was removed; Crawl4AI is the heavy web-fetch
 tool, reachable through mcpo as the `md` / `crawl` tools.
+
+> **mcpo caveat:** mcpo opens its MCP sessions (crawl4ai, searxng-mcp) **once at
+> startup and gives up on failure** — it does not reliably auto-reconnect. If the
+> `crawl4ai` (or `searxng-mcp`) container is ever recreated, restart mcpo afterwards
+> (`docker compose -f wellington/docker-compose.custom.yaml restart mcpo`), otherwise
+> the `/crawl4ai/*` and `/searxng/*` routes return 403/500 ("MCP session is not
+> available") until the next mcpo start.
 
 ---
 
@@ -201,6 +219,8 @@ git rebase --continue
 2. Re-import any Functions/Skills/Tools if you changed them.
 3. `git grep -in "scrapling\|patchright\|browserforge\|curl-cffi" backend src Dockerfile`
    should return nothing (Scrapling must stay removed).
+4. If any image tag changed, re-verify the version-pinned Crawl4AI patches and the
+   mcpo restart rule — see `UPGRADING.md`.
 
 ---
 
