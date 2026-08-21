@@ -38,7 +38,8 @@ How it works:
 - `PruningContentFilter` scores the page and prunes the HTML down to the main content; Crawl4AI then renders that pruned HTML into `fit_markdown` (and `fit_html`). That is the fit view, versus `raw_markdown`, which is the full page conversion.
 - Every nested object in `crawler_config` MUST use Crawl4AI's serializable-dict shape `{"type": "<ClassName>", "params": {...}}` — including `markdown_generator` itself. A plain nested dict (e.g. `"markdown_generator": {"content_filter": {...}}`) is accepted at parse time and then fails with a 500.
 - All filter params are optional — `"params": {}` is valid (default: `threshold: 0.48`). `PruningContentFilter` scoring is purely structural (text density, link density, tag importance, text length, compared against `threshold`) — `user_query` is accepted by the constructor but **ignored** in this build, so do not pass it. Tune `threshold` to prune more aggressively (higher) or keep more (lower). For question-focused extraction use `BM25ContentFilter` instead: it scores chunks against `user_query`, so put a concise natural-language question or topic there (e.g. `"how do I configure authentication tokens"`) — or just use `md` with `f: "bm25"`/`f: "llm"` + `q: <question>`, which does the same server-side.
-- Read each page from `results[i].markdown.fit_markdown`; treat an empty value as "no readable main content" (usually a 404) and fall back to that URL's `raw_markdown` or the next candidate.
+YT [12
+'[4567- Read each page from `results[i].markdown.fit_markdown`; treat an empty value as "no readable main content" (usually a 404) and fall back to that URL's `raw_markdown` or the next candidate.
 - `crawl` responses are large (each result includes full `html`, `cleaned_html`, `media`, `links`) — extract only the `markdown` fields you need.
 
 ## Rules
@@ -46,5 +47,4 @@ How it works:
 - Do not rely on just a search snippet. ALWAYS use `md` on at least 3 search results to get a detailed answer.
 - Do not use `crawl` for a single URL — use `md`.
 - Prefer primary sources (official docs, original publications); ignore ads, aggregators, and redirect links.
-- If no page can be read, tell the user which URLs failed instead of guessing the content.
-- Keep the final answer grounded in what the tools returned, with URLs cited.
+- If no page can be read, tell the user which URLs failed instead of guessing the content=--, M

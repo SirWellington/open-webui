@@ -2,9 +2,14 @@
 # Docs: https://docs.searxng.org/admin/settings/
 #
 # Engine pool notes:
-# - `inactive: false` is required on `google`/`braveapi` — the image default marks them inactive
-# - `braveapi` = official Brave Search API (consumes the 1000 req/mo quota, 1 call per query)
-# - `brave` = free scraper fallback (no quota); keeps working if the API quota runs out
+# - `inactive: false` is required on `google` — the image default marks it inactive
+# - `brave` = free scraper fallback (no quota); 429-blocks in bursts but is the
+#   best free engine, so it carries the highest free-pool weight
+# - `braveapi` = official Brave Search API (1000 req/mo quota); currently DISABLED to
+#   preserve quota until better caching is in place (see "kept off" below)
+# - `tavily` = official Tavily Search API (reliable, not IP-blocked); the primary
+#   result source. Custom engine lives in searxng-engines/tavily.py (mounted into
+#   the container). Highest weight so its results lead the merged output.
 # - engines listed under "kept off" are loaded but excluded from the pool
 #
 # NOTE: this file is a template. Current SearXNG no longer supports the legacy
@@ -36,13 +41,28 @@ search:
     - safe_search
     - time_range
     - weight
+  # This IP gets 429/403-banned by brave/google/mojeek in waves; hold the
+  # suspension longer (10min vs 3min) instead of re-hammering dead engines
+  # on every query (defaults: 180s)
+  suspended_times:
+    SearxEngineTooManyRequests: 600
+    SearxEngineAccessDenied: 600
 
 outgoing:
-  # 3.0s was dropping slow engines (brave/yahoo) mid-request
-  request_timeout: 5.0
+  # 3.0s/5.0s were dropping slow engines (brave/yahoo) mid-request; 7.0s keeps
+  # the flaky-but-alive engines in the pool
+  request_timeout: 7.0
 
 engines:
   # --- core pool (active) ---
+  # Tavily = reliable paid API (not IP-blocked). Highest weight so its ranked
+  # results dominate over the flaky/blocked free-pool scrapers. 1 credit/search.
+  - name: tavily
+    engine: tavily
+    api_key: "__SEARXNG_TAVILY_API_KEY__"
+    max_results: 10
+    weight: 10.0
+
   - name: google cse
     weight: 5.0
 
@@ -53,26 +73,26 @@ engines:
   - name: duckduckgo
     weight: 3.0
 
-  - name: braveapi
-    inactive: false
-    api_key: "__SEARXNG_BRAVE_API_KEY__"
-    weight: 3.0
-
   - name: brave
-    weight: 2.0
-
-  - name: mojeek
-    disabled: false
-    weight: 2.0
+    weight: 3.0
 
   - name: wikipedia
     weight: 2.0
 
   - name: yahoo
     disabled: false
-    weight: 1.0
+    # low quality + weak phrase/boolean handling; only fills in when better
+    # engines are blocked
+    weight: 0.5
 
   # --- kept off (CAPTCHA/blocked/noisy) ---
+  - name: braveapi
+    disabled: true
+    api_key: "__SEARXNG_BRAVE_API_KEY__"
+
+  - name: mojeek
+    disabled: true
+
   - name: bing
     disabled: true
 
