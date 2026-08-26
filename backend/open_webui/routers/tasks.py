@@ -68,6 +68,23 @@ def config_updates(data: dict, key_map: dict[str, str]) -> dict:
     return {key_map[field]: value for field, value in data.items() if field in key_map}
 
 
+def disable_qwen_thinking(payload: dict, model_id: str) -> None:
+    # Disable reasoning for Qwen3+ models on quick-prompt task operations so output lands in `content`
+    model_id_lower = model_id.lower()
+    if 'qwen' not in model_id_lower:
+        return
+    if re.search(r'qwen(?:3\.?8|\.latest)', model_id_lower):
+        # Qwen3.8 rejects reasoning_effort='none' (valid levels: xhigh/medium/low).
+        # Its documented off-switch is enable_thinking=false (sent both top-level and
+        # in chat_template_kwargs to cover hosted and self-hosted backends); the
+        # lowest valid effort is kept as a safety net in case a backend ignores it.
+        payload['enable_thinking'] = False
+        payload['reasoning_effort'] = 'low'
+        payload['chat_template_kwargs'] = {'enable_thinking': False}
+    else:
+        payload['reasoning_effort'] = 'none'
+
+
 ##################################
 #
 # Task Endpoints
@@ -175,9 +192,7 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
         },
     }
 
-    # Disable reasoning for Qwen3+ models on task operations so output lands in `content`
-    if task_model_id.lower().find('qwen') != -1:
-        payload['reasoning_effort'] = 'none'
+    disable_qwen_thinking(payload, task_model_id)
 
     # Process the payload through the pipeline
     try:
@@ -249,6 +264,8 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
         },
     }
 
+    disable_qwen_thinking(payload, task_model_id)
+
     # Process the payload through the pipeline
     try:
         payload = await process_pipeline_inlet_filter(request, payload, user, models)
@@ -319,6 +336,8 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
         },
     }
 
+    disable_qwen_thinking(payload, task_model_id)
+
     # Process the payload through the pipeline
     try:
         payload = await process_pipeline_inlet_filter(request, payload, user, models)
@@ -382,6 +401,8 @@ async def generate_image_prompt(request: Request, form_data: dict, user=Depends(
             'chat_id': form_data.get('chat_id', None),
         },
     }
+
+    disable_qwen_thinking(payload, task_model_id)
 
     # Process the payload through the pipeline
     try:
@@ -465,6 +486,8 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         },
     }
 
+    disable_qwen_thinking(payload, task_model_id)
+
     # Process the payload through the pipeline
     try:
         payload = await process_pipeline_inlet_filter(request, payload, user, models)
@@ -546,6 +569,8 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         },
     }
 
+    disable_qwen_thinking(payload, task_model_id)
+
     # Process the payload through the pipeline
     try:
         payload = await process_pipeline_inlet_filter(request, payload, user, models)
@@ -612,6 +637,8 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
             'chat_id': form_data.get('chat_id', None),
         },
     }
+
+    disable_qwen_thinking(payload, task_model_id)
 
     # Process the payload through the pipeline
     try:
