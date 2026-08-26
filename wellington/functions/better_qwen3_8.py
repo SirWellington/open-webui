@@ -77,8 +77,8 @@ class Filter:
             description="Priority level — set high so this runs last and is not overridden.",
         )
         model_pattern: str = Field(
-            default=r"qwen3\.?8",
-            description="Regex pattern to match model names that should use auto-thinking (default: qwen3.8-* only).",
+            default=r"qwen3\.?8|qwen\.latest",
+            description="Regex pattern to match model names that should use auto-thinking (default: qwen3.8-* and the qwen.latest workspace model).",
         )
         hard_word_threshold: int = Field(
             default=50,
